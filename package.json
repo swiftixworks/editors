@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "name": "editors",
+  "version": "0.1.0",
+  "architecture": "svm64",
+  "minimumSwiftixVersion": "0.12.0",
+  "summary": "terminal text editors",
+  "details": "A nano-style full-screen text editor for Swiftix terminals.",
+  "commands": [
+    "nano"
+  ]
+}

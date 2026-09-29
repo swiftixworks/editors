@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: editors (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out editors
+        uses: actions/checkout@v6
+        with:
+          path: editors
+
+      # nano needs the terminal ABI from swiftixworks/Swiftix#1; pin the
+      # v0.12.0 tag here once that release ships.
+      - name: Check out Swiftix with the terminal ABI
+        uses: actions/checkout@v6
+        with:
+          repository: swiftixworks/Swiftix
+          ref: feat/go-terminal-abi
+          path: Swiftix
+
+      - name: Install Swift 6.3.3
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes libcurl4-openssl-dev gpg
+          swiftly_archive="${RUNNER_TEMP}/swiftly-$(uname -m).tar.gz"
+          swiftly_bootstrap="${RUNNER_TEMP}/swiftly-bootstrap"
+          swiftly_post_install="${RUNNER_TEMP}/swiftly-post-install.sh"
+          mkdir -p "${swiftly_bootstrap}"
+          curl --fail --location --silent --show-error \
+            "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" \
+            --output "${swiftly_archive}"
+          tar --extract --gzip --file "${swiftly_archive}" --directory "${swiftly_bootstrap}"
+          export SWIFTLY_HOME_DIR="${RUNNER_TEMP}/swiftly-home"
+          export SWIFTLY_BIN_DIR="${RUNNER_TEMP}/swiftly-bin"
+          "${swiftly_bootstrap}/swiftly" init \
+            --skip-install \
+            --quiet-shell-followup \
+            --assume-yes \
+            --no-modify-profile
+          export PATH="${SWIFTLY_BIN_DIR}:${PATH}"
+          swiftly install 6.3.3 \
+            --use \
+            --assume-yes \
+            --post-install-file "${swiftly_post_install}"
+          if [[ -f "${swiftly_post_install}" ]]; then
+            bash "${swiftly_post_install}"
+          fi
+          swift_location="$(swiftly use --print-location)"
+          printf 'SWIFTLY_HOME_DIR=%s\nSWIFTLY_BIN_DIR=%s\n' \
+            "${SWIFTLY_HOME_DIR}" "${SWIFTLY_BIN_DIR}" >> "${GITHUB_ENV}"
+          printf '%s\n' "${SWIFTLY_BIN_DIR}" "${swift_location}" >> "${GITHUB_PATH}"
+
+      - name: Show Swift toolchain
+        run: swift --version
+
+      - name: Build with warnings as errors
+        working-directory: editors
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Verify checked-in package
+        working-directory: editors
+        run: swift run EditorsPackageBuilder --check
+
+      - name: Prove deterministic rebuilds
+        working-directory: editors
+        run: |
+          swift run EditorsPackageBuilder --output "${RUNNER_TEMP}/editors-a.pkg"
+          swift run EditorsPackageBuilder --output "${RUNNER_TEMP}/editors-b.pkg"
+          cmp "${RUNNER_TEMP}/editors-a.pkg" "${RUNNER_TEMP}/editors-b.pkg"
+
+      - name: Run tests with warnings as errors
+        working-directory: editors
+        run: swift test -Xswiftc -warnings-as-errors
+
+      - name: Check whitespace
+        working-directory: editors
+        run: git diff --check
