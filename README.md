@@ -29,8 +29,9 @@ The name describes a familiar workflow, not a GNU nano implementation:
 
 - one buffer; no undo, replace, file insertion, syntax highlighting, mouse, or
   Meta (`Esc` + key) bindings;
-- files up to 24 KiB, so each load, search, and save fits one Swiftix Go
-  instruction slice (about one million VM instructions);
+- files up to 512 KiB: loading, searching, saving, and inserting or removing
+  lines use the native Swiftix Go `strings` functions, and the joined buffer
+  must stay within the 1 MiB guest string limit while editing;
 - every character occupies one terminal column, matching the Swiftix terminal
   renderer; tabs expand to multiples of eight and control bytes show as `^X`;
 - saving writes the file in place and ends it with a newline;
@@ -39,8 +40,8 @@ The name describes a familiar workflow, not a GNU nano implementation:
 - messages outside the editor, such as usage errors, go to standard output.
 
 nano needs the `swiftix/userland` terminal ABI (`ReadStdin`, `WriteFile`,
-`SetRawMode`, `WindowSize`), string escapes, and resumable file-backed
-execution, so it requires Swiftix 0.12.0 or later.
+`SetRawMode`, `WindowSize`), the native `strings` package, string escapes, and
+resumable file-backed execution, so it requires Swiftix 0.12.0 or later.
 
 ## Building and verification
 

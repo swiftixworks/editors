@@ -1,5 +1,7 @@
 package main
 
+import "strings"
+
 // Text helpers for byte strings that hold UTF-8. Swiftix Go has no bit
 // operators, rune literals, or strconv.Itoa, so byte classes are compared
 // numerically and numbers are formatted by hand.
@@ -8,7 +10,6 @@ package main
 // loops that run per byte are written inline rather than through helpers.
 
 const tabSize = 8
-const blank = "                                                                                                                                "
 
 // isContinuation reports whether b is a UTF-8 continuation byte.
 func isContinuation(b int) bool {
@@ -124,12 +125,7 @@ func spaces(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	out := ""
-	for n > len(blank) {
-		out = out + blank
-		n = n - len(blank)
-	}
-	return out + blank[:n]
+	return strings.Repeat(" ", n)
 }
 
 // caretLetter returns the letter shown after ^ for control byte b.
@@ -138,22 +134,6 @@ func caretLetter(b int) string {
 		return "?"
 	}
 	return "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_"[b : b+1]
-}
-
-// indexOf returns the first byte index at or after from where needle occurs
-// in s, or -1.
-func indexOf(s string, needle string, from int) int {
-	if len(needle) == 0 {
-		return -1
-	}
-	first := needle[0]
-	last := len(s) - len(needle)
-	for i := from; i <= last; i++ {
-		if s[i] == first && s[i:i+len(needle)] == needle {
-			return i
-		}
-	}
-	return -1
 }
 
 // clip returns the part of s visible in width display columns starting at

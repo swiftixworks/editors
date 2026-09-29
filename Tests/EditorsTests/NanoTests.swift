@@ -331,38 +331,56 @@ struct NanoTests {
         #expect(session.terminal.rawMode)
     }
 
-    @Test func largestAcceptedFileLoadsSearchesAndSaves() throws {
-        var text = ""
-        while text.utf8.count + 64 <= 24_576 {
-            text += String(repeating: "x", count: 63) + "\n"
+    @Test func largestAcceptedFileEditsWithinTheSliceBudget() throws {
+        // 16,383 lines of 32 bytes: 524,256 bytes, just under the limit. Line
+        // count is what guest loops would scale with.
+        var rows = (1..<16_383).map { number -> String in
+            let digits = String(number)
+            return String(repeating: "x", count: 31 - digits.count) + digits
         }
-        text = String(text.dropLast(7)) + "needle\n"
+        rows.append(String(repeating: "y", count: 25) + "needle")
+        let text = rows.joined(separator: "\n") + "\n"
         let session = try EditorSession(files: ["/large": text])
 
         session.type("nano /large\n")
-        #expect(statusMessage(in: session.takeOutput()) == "Read 384 lines")
+        #expect(statusMessage(in: session.takeOutput()) == "Read 16383 lines")
+
         session.send(Key.ctrl("W"))
         session.type("needle")
         session.send(Key.enter)
-        #expect(session.location()?.hasPrefix("line 384/384") == true)
+        #expect(session.location() == "line 16383/16383, col 26/32")
+        session.send(Key.enter)
         session.type("!")
+        #expect(session.location() == "line 16384/16384, col 2/8")
+
+        session.send(Key.ctrl("W"))
+        session.type("x8192")
+        session.send(Key.enter)
+        #expect(statusMessage(in: session.takeOutput()) == "Search Wrapped")
+        #expect(session.location() == "line 8192/16384, col 27/32")
+        session.keys([Key.ctrl("K"), Key.up, Key.ctrl("U")])
+
         session.send(Key.ctrl("O"))
         session.send(Key.enter)
+        #expect(statusMessage(in: session.takeOutput()) == "Wrote 16384 lines")
         session.send(Key.ctrl("X"))
 
+        var expected = rows
+        expected[16_382] = String(repeating: "y", count: 25)
+        expected.append("!needle")
+        expected.swapAt(8_190, 8_191)
         let saved = try #require(session.contents(of: "/large"))
-        #expect(saved.hasSuffix("!needle\n"))
-        #expect(saved.utf8.count == text.utf8.count + 1)
+        #expect(saved == expected.joined(separator: "\n") + "\n")
     }
 
     @Test func refusesFilesAboveTheLimit() throws {
-        let text = String(repeating: String(repeating: "y", count: 99) + "\n", count: 250)
+        let text = String(repeating: String(repeating: "y", count: 99) + "\n", count: 5_300)
         let session = try EditorSession(files: ["/huge": text])
 
         session.type("nano /huge\n")
 
         #expect(statusMessage(in: session.takeOutput())
-            == "File is too large to open (limit 24 KiB)")
+            == "File is too large to open (limit 512 KiB)")
     }
 
     @Test func requiresATerminal() throws {
